@@ -1,0 +1,17 @@
+feature,importance
+car_age,0.36965459148108326
+transmission_Automatic,0.23171510076433802
+fuel_Diesel,0.168532694304121
+km_driven,0.0859052616233692
+transmission_Manual,0.07147014000377687
+fuel_Petrol,0.0572423230646952
+seller_type_Individual,0.007822157258025984
+seller_type_Trustmark Dealer,0.002352856629042262
+owner_Second Owner,0.002242099817729806
+owner_First Owner,0.0014518246583900866
+seller_type_Dealer,0.0005917800474182947
+owner_Fourth & Above Owner,0.0005370154874611504
+owner_Test Drive Car,0.00031175325439656675
+owner_Third Owner,0.00015796734242061363
+fuel_LPG,1.2434263731744878e-05
+fuel_CNG,0.0

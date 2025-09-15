@@ -1,3 +1,5 @@
+<img width="811" height="438" alt="image" src="https://github.com/user-attachments/assets/dffbc02a-b7a4-4019-b5e9-363696176185" />
+
 # Used Car Price Prediction
 
 A complete, reproducible pipeline to train, evaluate, and deploy a Used Car Price Prediction model using scikit-learn. It includes data cleaning, exploratory plots, model comparison with hyperparameter tuning, feature importance, model persistence (.pickle), and a Flask app for web and API inference.

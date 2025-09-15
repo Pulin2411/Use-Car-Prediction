@@ -1,0 +1,7 @@
+dataset_file: CAR DETAILS FROM CAR DEKHO.csv
+rows_after_cleaning: 3559
+features_used: ['km_driven', 'car_age', 'fuel', 'seller_type', 'transmission', 'owner']
+best_model: GradientBoosting
+best_model_metrics: {'model': 'GradientBoosting', 'r2': 0.5825914059772423, 'mae': 150462.70847140043, 'rmse': 50537259751.28463}
+plots_dir: /content/drive/MyDrive/Project: Used Car Price Prediction using Vehicle Dataset/Car details/car_price_plots
+saved_model: /content/drive/MyDrive/Project: Used Car Price Prediction using Vehicle Dataset/Car details/best_model_GradientBoosting.pickle

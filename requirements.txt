@@ -2,10 +2,11 @@
 pandas==2.2.2
 numpy==1.26.4
 scikit-learn==1.4.2
-joblib==1.4.2
+
 
 # Visualization
 matplotlib==3.9.0
 
 # Web App Framework
 streamlit==1.36.0
+

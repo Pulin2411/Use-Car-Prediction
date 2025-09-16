@@ -86,34 +86,11 @@ Environment variables:
 Features:
 - Auto-loads the most recent `best_model_*.pickle` from `DATA_DIR`, or use `MODEL_PATH` env var to point to a specific model.
 - Web form for single prediction with inputs: Year, Km Driven, Fuel, Seller Type, Transmission, Owner.
-- JSON API at `POST /api/predict` accepting a single JSON object or a list for batch predictions.
-
-Example JSON request:
-```
-POST /api/predict
-Content-Type: application/json
-
-{
-  "year": 2016,
-  "km_driven": 52000,
-  "fuel": "Petrol",
-  "seller_type": "Individual",
-  "transmission": "Manual",
-  "owner": "First Owner"
-}
-```
-Response:
-```
-{
-  "predictions": [437215.42]
-}
-```
 
 App environment variables:
 - `DATA_DIR`: Directory to search for `best_model_*.pickle` if `MODEL_PATH` is not set.
 - `MODEL_PATH`: Absolute path to a specific `.pickle` model file.
 - `CURRENT_YEAR`: Year used to compute `car_age` in the app (default 2025).
-- `PORT`: Port to run the Flask server (default 8000).
 
 ## Reproducibility Notes
 - Random seeds: `random_state=42` is used for splits and certain models for consistent results.

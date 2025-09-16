@@ -30,7 +30,7 @@ See `requirements.txt` for minimal package requirements:
 - pandas
 - matplotlib
 - scikit-learn
-- Streamlite
+- Streamlit
 
 Install:
 ```
@@ -79,12 +79,9 @@ Environment variables:
 - `DATA_DIR`: Folder containing the CSV(s) and where artifacts are saved. Default is the Google Drive path; set to a local folder as needed.
 - `CURRENT_YEAR`: Used to compute `car_age`. Default: 2025.
 
-## Inference App (Flask)
-Start the app:
-```
-python app.py
-```
-Then open http://localhost:8000
+## Inference App (Streamlit)
+<img width="285" height="316" alt="image" src="https://github.com/user-attachments/assets/4f62def3-5666-49cf-823c-7e7c9d5aa029" />
+
 
 Features:
 - Auto-loads the most recent `best_model_*.pickle` from `DATA_DIR`, or use `MODEL_PATH` env var to point to a specific model.

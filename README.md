@@ -104,12 +104,7 @@ Example metrics from a typical run (will vary by dataset split):
 
 These values indicate moderate explanatory power on the sample dataset and are included in the generated summary file for transparency.
 
-## Next Steps / Improvements
-- Use `squared=False` for RMSE reporting and add cross-validation reporting across folds.
-- Extend features (e.g., brand/model extraction from `name`, city/region, service history, engine specs).
-- Try additional models: XGBoost/LightGBM/CatBoost with categorical handling.
-- Calibrate predictions and/or apply quantile regression for interval estimates.
-- Add model registry and experiment tracking (e.g., MLflow) and containerize the app.
+
 
 ### About Author
 Pulin Shah — Lead IT Support Coordinator | IT Service Delivery | n8n Automations |ML|DL|Data Science|Prompt Enigneering|RAG|Gen-AI|EDA

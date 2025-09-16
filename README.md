@@ -17,7 +17,7 @@ A complete, reproducible pipeline to train, evaluate, and deploy a Used Car Pric
 ```
 .
 ├── used_car_price_pipeline_pickle.py    # Train & evaluate; saves best model as .pickle
-├── app.py                               # Flask app: HTML form + /api/predict endpoint
+├── app.py                               # Streamlit 
 ├── requirements.txt                     # Minimal dependencies
 └── data/                                # (Optional) Place dataset CSVs here if not using Drive
 ```

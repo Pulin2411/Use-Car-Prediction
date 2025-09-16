@@ -30,17 +30,14 @@ See `requirements.txt` for minimal package requirements:
 - pandas
 - matplotlib
 - scikit-learn
-- flask (runtime for app)
+- Streamlite
 
 Install:
 ```
 pip install -r requirements.txt
 ```
 
-For serving the app:
-```
-pip install flask
-```
+
 
 ## Data
 Place a CSV file with used car listings in the configured `DATA_DIR`. The pipeline auto-detects the first CSV containing `car` in its filename (fallback to first CSV). Expected columns (variants are auto-mapped):

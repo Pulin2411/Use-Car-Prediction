@@ -9,7 +9,7 @@ st.set_page_config(page_title="Used Car Price Predictor", page_icon="🚗", layo
 # ---------- Config ----------
 DATA_DIR = os.environ.get(
     "DATA_DIR",
-    "/content/drive/MyDrive/Project: Used Car Price Prediction using Vehicle Dataset/Car details",
+    "/content/drive/MyDrive/Project_Used Car Price Prediction using Vehicle Dataset/Car details",
 )
 CURRENT_YEAR = int(os.environ.get("CURRENT_YEAR", 2025))
 MODEL_PATH = os.environ.get("MODEL_PATH", "")
@@ -98,3 +98,4 @@ if file is not None:
             st.download_button("Download predictions", data=out.to_csv(index=False), file_name="predictions.csv", mime="text/csv")
     except Exception as e:
         st.error(f"Batch prediction failed: {e}")
+

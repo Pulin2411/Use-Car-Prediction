@@ -9,6 +9,7 @@ import streamlit as st
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error  # ✅ added
 
 # ---- Numpy unpickling shim for some environments ----
 try:
@@ -81,7 +82,7 @@ def load_model(path: str):
 with st.spinner("Loading model..."):
     model = load_model(MODEL_PATH)
 
-# ---------- Helpers to introspect expected columns from the pipeline ----------
+# ---------- Helpers ----------
 def _flatten_transformers(ct: ColumnTransformer):
     flat = []
     for name, transformer, cols in ct.transformers:
@@ -125,7 +126,6 @@ def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[st
     if not isinstance(model, Pipeline):
         raise ValueError("Expected an sklearn Pipeline object.")
     preproc = None
-    # find ColumnTransformer in pipeline (possibly nested)
     for _, step in model.steps:
         if isinstance(step, ColumnTransformer):
             preproc = step
@@ -160,7 +160,7 @@ except Exception as e:
     st.error(f"Could not introspect model input schema: {e}")
     st.stop()
 
-# ---------- Build car-name dropdown options ----------
+# ---------- Car-name dropdown ----------
 def detect_car_name_feature(cat_map: Dict[str, List[str]]) -> str:
     candidates = ["car_name", "name", "car", "model", "car_model", "brand_model"]
     lower_keys = {k.lower(): k for k in cat_map.keys()}
@@ -284,6 +284,32 @@ if predict_clicked:
     input_df = build_input_row()
     try:
         pred = model.predict(input_df)[0]
-        result_container.success(f"**Predicted price:** {float(pred):,.2f}")
+        result_container.success(f"**Predicted price:** ₹{float(pred):,.0f}")
     except Exception as e:
         result_container.error(f"Prediction failed: {e}")
+
+# ---------- Evaluation Section ----------
+st.markdown("---")
+st.header("📊 Model Performance Metrics")
+
+uploaded_file = st.file_uploader("Upload a CSV file with actual and predicted prices", type=["csv"])
+
+if uploaded_file is not None:
+    df = pd.read_csv(uploaded_file)
+
+    if "actual" in df.columns and "predicted" in df.columns:
+        y_test = df["actual"]
+        y_pred = df["predicted"]
+
+        r2 = r2_score(y_test, y_pred)
+        mae = mean_absolute_error(y_test, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+        st.write(f"**R² Score:** {r2:.4f}")
+        st.write(f"**MAE:** ₹{mae:,.0f}")
+        st.write(f"**RMSE:** ₹{rmse:,.0f}")
+
+        st.subheader("🔎 Sample Data Preview")
+        st.dataframe(df.head())
+    else:
+        st.error("CSV must contain 'actual' and 'predicted' columns.")

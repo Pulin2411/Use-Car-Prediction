@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import streamlit as st
 import pickle
-import numpy as np
 import pandas as pd
 
-# Load the saved model
+# Load the trained model
 @st.cache_resource
 def load_model():
     with open("best_model_GradientBoosting.pickle", "rb") as f:
@@ -13,33 +12,35 @@ def load_model():
 
 model = load_model()
 
-st.set_page_config(page_title="Car Price Predictor", layout="centered")
+# -------------------------------
+# Define your features here
+# Replace with your actual column names
+numeric_features = ["year", "mileage"]   # Example numeric inputs
+categorical_features = ["fuel_type", "transmission"]  # Example categorical inputs
+# -------------------------------
 
-st.title("🚗 Used Car Price Predictor")
-st.write("Enter car details below to predict the price.")
+st.title("🚗 Used Car Price Prediction App")
+st.write("Enter car details below and get the predicted price.")
 
-# --- Replace these with your actual feature names ---
-numeric_features = ["year", "mileage"]   # Example numeric features
-categorical_features = ["fuel_type", "transmission"]  # Example categorical features
+# Input form
+with st.form("prediction_form"):
+    # Numeric inputs
+    numeric_data = {}
+    for col in numeric_features:
+        numeric_data[col] = st.number_input(f"Enter {col}", min_value=0, step=1)
 
-# Collect user input
-num_inputs = {}
-for feature in numeric_features:
-    num_inputs[feature] = st.number_input(f"Enter {feature}", min_value=0, value=0)
+    # Categorical inputs
+    categorical_data = {}
+    for col in categorical_features:
+        categorical_data[col] = st.selectbox(f"Select {col}", ["Option1", "Option2", "Option3"])
 
-cat_inputs = {}
-for feature in categorical_features:
-    cat_inputs[feature] = st.selectbox(f"Select {feature}", ["Option1", "Option2", "Option3"])
+    submit = st.form_submit_button("Predict Price")
 
-# Convert input to DataFrame
-input_data = {**num_inputs, **cat_inputs}
-input_df = pd.DataFrame([input_data])
+if submit:
+    # Combine numeric + categorical into DataFrame
+    input_data = {**numeric_data, **categorical_data}
+    input_df = pd.DataFrame([input_data])
 
-# Prediction button
-if st.button("Predict Price"):
-    try:
-        prediction = model.predict(input_df)[0]
-        st.success(f"💰 Predicted Price: {prediction:,.2f}")
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
-        st.write("⚠️ Please make sure your feature names and options match the training dataset.")
+    # Make prediction
+    prediction = model.predict(input_df)[0]
+    st.success(f"💰 Predicted Price: {prediction:,.2f}")

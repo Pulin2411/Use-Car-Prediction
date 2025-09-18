@@ -65,13 +65,6 @@ h1, h2, h3 { letter-spacing: .2px; }
 </style>
 """, unsafe_allow_html=True)
 
-#st.markdown(
-    "<div class='hero'><span style='font-size:1.6rem'>🚗</span>"
-    "<div><div style='font-size:1.4rem; font-weight:700;'>Used Car Price Prediction</div>"
-    "<div class='small-note'>Same model & fields, refreshed layout only.</div></div></div>",
-    unsafe_allow_html=True
-) 
-
 MODEL_PATH = "best_model_GradientBoosting.pickle"
 
 @st.cache_resource(show_spinner=True)

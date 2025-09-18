@@ -107,7 +107,8 @@ These values indicate moderate explanatory power on the sample dataset and are i
 <img width="571" height="637" alt="image" src="https://github.com/user-attachments/assets/f624c6c2-2057-4398-870d-d1bddead48d5" />
 <img width="586" height="684" alt="image" src="https://github.com/user-attachments/assets/174da519-2980-4873-a71b-534204263999" />
 <img width="585" height="754" alt="image" src="https://github.com/user-attachments/assets/38e1b5c4-a929-475a-bfdb-d190cc2130a7" />
-<img width="677" height="782" alt="image" src="https://github.com/user-attachments/assets/b5ccbd97-db41-46b4-9805-9f7aaa803b38" />
+<img width="575" height="745" alt="image" src="https://github.com/user-attachments/assets/f608299f-14eb-4d6e-9efe-1aaa15b86b94" />
+
 
 
 

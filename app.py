@@ -120,8 +120,8 @@ def coerce_types(df: pd.DataFrame, type_map: Dict[str, str]) -> pd.DataFrame:
 
 
 # ---------- Streamlit app ----------
-st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
-st.title("🚗 Used Car Price Prediction")
+st.set_page_config(page_title="Used Car Price Prediction", page_icon="ðŸš—", layout="centered")
+st.title("ðŸš— Used Car Price Prediction")
 
 MODEL_PATH = "best_model_GradientBoosting.pickle"
 
@@ -236,5 +236,5 @@ if uploaded is not None:
             st.error(f"Prediction failed: {e}")
 
 st.caption(
-    "If you still see a 'columns are missing' error, double-check that your column **names** and **types** match the expected inputs above. The pipeline’s ColumnTransformer requires an exact match to the training schema."
+    "If you still see a 'columns are missing' error, double-check that your column **names** and **types** match the expected inputs above. The pipelineâ€™s ColumnTransformer requires an exact match to the training schema."
 )

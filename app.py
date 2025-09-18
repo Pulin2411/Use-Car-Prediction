@@ -18,9 +18,59 @@ try:
 except Exception:
     pass
 
-# ---- Page setup ----
-st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
-st.title("🚗 Used Car Price Prediction")
+# ---- Page setup (same title/content) ----
+st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="wide")
+st.markdown("""
+<style>
+/* Background + type */
+.stApp {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, #eaf0ff 0%, #ffffff 50%) no-repeat,
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+h1, h2, h3 { letter-spacing: .2px; }
+
+/* Hero */
+.hero {
+  display:flex; align-items:center; gap:14px;
+  padding: 18px 22px; border-radius: 18px;
+  background: rgba(255,255,255,.7);
+  border: 1px solid #e6ecf5; box-shadow: 0 6px 18px rgba(10,20,40,.06);
+  backdrop-filter: blur(6px);
+}
+
+/* Cards */
+.card {
+  border-radius: 16px; padding: 18px 18px 8px 18px;
+  background: rgba(255,255,255,.85);
+  border: 1px solid #e9eef5; box-shadow: 0 8px 24px rgba(15,23,42,.06);
+  backdrop-filter: blur(6px);
+}
+.card-title { font-weight:600; margin-bottom: 6px; }
+
+/* Sticky result on the right */
+.sticky {
+  position: sticky; top: 12px;
+}
+
+/* CTA Button */
+.big-cta button {
+  height: 3.2rem; font-size: 1.08rem; font-weight: 600;
+  border-radius: 12px; box-shadow: 0 8px 18px rgba(0,0,0,.06);
+}
+.small-note { color:#6b7280; font-size:.92rem; }
+
+/* Tidy up spacing */
+.block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(
+    "<div class='hero'><span style='font-size:1.6rem'>🚗</span>"
+    "<div><div style='font-size:1.4rem; font-weight:700;'>Used Car Price Prediction</div>"
+    "<div class='small-note'>Same model & fields, refreshed layout only.</div></div></div>",
+    unsafe_allow_html=True
+)
 
 MODEL_PATH = "best_model_GradientBoosting.pickle"
 
@@ -111,9 +161,8 @@ except Exception as e:
     st.error(f"Could not introspect model input schema: {e}")
     st.stop()
 
-# ---------- Build car-name dropdown options ----------
+# ---------- Build car-name dropdown options (unchanged content) ----------
 def detect_car_name_feature(cat_map: Dict[str, List[str]]) -> str:
-    # try common names used in datasets/models
     candidates = ["car_name", "name", "car", "model", "car_model", "brand_model"]
     lower_keys = {k.lower(): k for k in cat_map.keys()}
     for cand in candidates:
@@ -121,7 +170,6 @@ def detect_car_name_feature(cat_map: Dict[str, List[str]]) -> str:
             return lower_keys[cand]
     return ""
 
-# Preferred: categories from model; Fallback: curated list
 car_name_feature = detect_car_name_feature(cat_map)
 if car_name_feature:
     car_options = sorted([c for c in cat_map.get(car_name_feature, []) if c and str(c).strip() != ""])
@@ -137,22 +185,39 @@ else:
         "Renault Kwid", "Skoda Rapid", "Volkswagen Polo"
     ]
 
-# ---------- UI (matches your screenshot layout) ----------
-left, right = st.columns(2)
+# ---------- LAYOUT-ONLY CHANGES BELOW ----------
+left, right = st.columns([1.25, 1])
 
 with left:
-    # Car name as dropdown
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("<div class='card-title'>Vehicle Details</div>", unsafe_allow_html=True)
+    # (same widgets / same labels / same options)
     car_name = st.selectbox("Car Name (for display)", car_options, index=car_options.index("Maruti Swift") if "Maruti Swift" in car_options else 0)
     year = st.number_input("Year", min_value=1980, max_value=datetime.now().year, value=2015, step=1, format="%d")
     km_driven = st.number_input("KM Driven", min_value=0, value=50000, step=500, format="%d")
     fuel = st.selectbox("Fuel Type", ["Petrol", "Diesel", "CNG", "LPG", "Electric"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-with right:
+    st.markdown("<div class='card' style='margin-top:14px;'>", unsafe_allow_html=True)
+    st.markdown("<div class='card-title'>Listing & Ownership</div>", unsafe_allow_html=True)
     seller_type = st.selectbox("Seller Type", ["Individual", "Dealer", "Trustmark Dealer"])
     transmission = st.selectbox("Transmission", ["Manual", "Automatic"])
     owner_type = st.selectbox("Owner Type", ["First Owner", "Second Owner", "Third Owner", "Fourth & Above"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------- Build input row for the model ----------
+    st.markdown("<div class='big-cta' style='margin-top:14px;'>", unsafe_allow_html=True)
+    predict_clicked = st.button("Predict Selling Price", use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with right:
+    st.markdown("<div class='card sticky'>", unsafe_allow_html=True)
+    st.markdown("<div class='card-title'>Prediction</div>", unsafe_allow_html=True)
+    # (the result gets filled after click)
+    result_container = st.empty()
+    st.caption("Tip: Car Name is a dropdown. If your model includes a car-name feature, options are loaded from it automatically.")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------- Build input row for the model (unchanged logic) ----------
 def normalize(s: str) -> str:
     return str(s).strip().lower()
 
@@ -227,13 +292,11 @@ def build_input_row() -> pd.DataFrame:
 
     return pd.DataFrame([row], columns=required_cols)
 
-# ---------- Predict ----------
-if st.button("Predict Selling Price"):
+# ---------- Predict (unchanged behavior; just writes into the right panel) ----------
+if predict_clicked:
     input_df = build_input_row()
     try:
         pred = model.predict(input_df)[0]
-        st.success(f"**Predicted price:** {float(pred):,.2f}")
+        result_container.success(f"**Predicted price:** {float(pred):,.2f}")
     except Exception as e:
-        st.error(f"Prediction failed: {e}")
-
-st.caption("Tip: Car Name is a dropdown. If your model includes a car-name feature, options are loaded from it automatically.")
+        result_container.error(f"Prediction failed: {e}")

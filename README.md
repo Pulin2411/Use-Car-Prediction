@@ -104,15 +104,11 @@ Example metrics from a typical run (will vary by dataset split):
 
 These values indicate moderate explanatory power on the sample dataset and are included in the generated summary file for transparency.
 
-<img width="594" height="684" alt="image" src="https://github.com/user-attachments/assets/f0d60b10-615d-4d4b-8593-c32c1eb89be5" />
-<img width="571" height="637" alt="image" src="https://github.com/user-attachments/assets/f624c6c2-2057-4398-870d-d1bddead48d5" />
-<img width="586" height="684" alt="image" src="https://github.com/user-attachments/assets/174da519-2980-4873-a71b-534204263999" />
-<img width="585" height="754" alt="image" src="https://github.com/user-attachments/assets/38e1b5c4-a929-475a-bfdb-d190cc2130a7" />
-<img width="575" height="745" alt="image" src="https://github.com/user-attachments/assets/f608299f-14eb-4d6e-9efe-1aaa15b86b94" />
-
-
-
-
+<img width="587" height="428" alt="image" src="https://github.com/user-attachments/assets/d8cf49d8-2475-4585-ab5b-112d3675db99" />
+<img width="596" height="460" alt="image" src="https://github.com/user-attachments/assets/fc737b9d-bcdc-46f2-8f8b-e8ec5009ec9f" />
+<img width="567" height="409" alt="image" src="https://github.com/user-attachments/assets/ea8f525e-6ab7-4985-8f01-89b8653e141c" />
+<img width="571" height="413" alt="image" src="https://github.com/user-attachments/assets/1d5a416b-32bd-4c44-8e1c-c261b67961f7" />
+<img width="570" height="407" alt="image" src="https://github.com/user-attachments/assets/5355aa3c-20a3-4c25-964c-ab62afe335c1" />
 
 ### About Author
 Pulin Shah — Lead IT Support Coordinator | IT Service Delivery | n8n Automations |ML|DL|Data Science|Prompt Enigneering|RAG|Gen-AI|EDA

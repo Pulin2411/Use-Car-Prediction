@@ -12,14 +12,11 @@ from sklearn.pipeline import Pipeline
 
 
 # ---------- Utilities to make unpickling more robust ----------
-# Some environments pickle models referring to 'numpy._core'.
-# Provide a compatibility alias so unpickling doesn't fail.
 try:
     import numpy as _np
     if "numpy._core" not in sys.modules:
         sys.modules["numpy._core"] = _np.core
 except Exception:
-    # If this fails in your environment it's harmless; the load below may still work.
     pass
 
 
@@ -158,7 +155,17 @@ with st.form("single_inference"):
                 default = cat_map[col][0]
                 form_values[col] = st.selectbox(col, cat_map[col], index=0)
             else:
-                form_values[col] = st.text_input(col, value="")
+                # Hardcode dropdowns for known categorical fields
+                if col.lower() == "fuel":
+                    form_values[col] = st.selectbox(col, ["petrol", "diesel", "cng", "lpg", "electric"])
+                elif col.lower() == "seller_type":
+                    form_values[col] = st.selectbox(col, ["individual", "dealer", "trustmark_dealer"])
+                elif col.lower() == "transmission":
+                    form_values[col] = st.selectbox(col, ["manual", "automatic"])
+                elif col.lower() == "owner":
+                    form_values[col] = st.selectbox(col, ["first", "second", "third", "fourth & above"])
+                else:
+                    form_values[col] = st.text_input(col, value="")
         else:
             # Numeric input
             if col in ["km_driven", "car_age"]:

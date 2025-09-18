@@ -1,7 +1,7 @@
 import pickle
 import sys
 from datetime import datetime
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 
-# ---------- (Unpickling shim for some numpy builds) ----------
+# ---- Numpy unpickling shim for some environments ----
 try:
     import numpy as _np
     if "numpy._core" not in sys.modules:
@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-# ---------- Page ----------
+# ---- Page setup ----
 st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
 st.title("🚗 Used Car Price Prediction")
 
@@ -76,6 +76,7 @@ def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[st
     if not isinstance(model, Pipeline):
         raise ValueError("Expected an sklearn Pipeline object.")
     preproc = None
+    # find ColumnTransformer in pipeline (possibly nested)
     for _, step in model.steps:
         if isinstance(step, ColumnTransformer):
             preproc = step
@@ -110,116 +111,17 @@ except Exception as e:
     st.error(f"Could not introspect model input schema: {e}")
     st.stop()
 
-# ---------- UI (matches the screenshot) ----------
-# Left column: car name, year, km driven, fuel
-# Right column: seller type, transmission, owner
-left, right = st.columns(2)
+# ---------- Build car-name dropdown options ----------
+def detect_car_name_feature(cat_map: Dict[str, List[str]]) -> str:
+    # try common names used in datasets/models
+    candidates = ["car_name", "name", "car", "model", "car_model", "brand_model"]
+    lower_keys = {k.lower(): k for k in cat_map.keys()}
+    for cand in candidates:
+        if cand in lower_keys:
+            return lower_keys[cand]
+    return ""
 
-with left:
-    car_name = st.text_input("Car Name (for display)", value="Maruti Swift")
-    year = st.number_input("Year", min_value=1980, max_value=datetime.now().year, value=2015, step=1, format="%d")
-    km_driven = st.number_input("KM Driven", min_value=0, value=50000, step=500, format="%d")
-    fuel = st.selectbox("Fuel Type", ["Petrol", "Diesel", "CNG", "LPG", "Electric"])
-
-with right:
-    seller_type = st.selectbox("Seller Type", ["Individual", "Dealer", "Trustmark Dealer"])
-    transmission = st.selectbox("Transmission", ["Manual", "Automatic"])
-    owner_type = st.selectbox("Owner Type", ["First Owner", "Second Owner", "Third Owner", "Fourth & Above"])
-
-# ---------- Build one row that matches the model's required columns ----------
-def normalize(s: str) -> str:
-    return s.strip().lower()
-
-def build_input_row() -> pd.DataFrame:
-    # Start with an empty row for all required columns
-    row = {c: np.nan for c in required_cols}
-
-    # Possible column name variants (lowercased)
-    cols_lower = {c.lower(): c for c in required_cols}
-
-    # Car name (if model expects it)
-    for candidate in ["car_name", "name", "car"]:
-        if candidate in cols_lower:
-            row[cols_lower[candidate]] = car_name
-
-    # Year / Age
-    if "year" in cols_lower:
-        row[cols_lower["year"]] = int(year)
-    elif "car_age" in cols_lower:
-        row[cols_lower["car_age"]] = int(max(0, datetime.now().year - int(year)))
-
-    # Kilometers driven
-    for candidate in ["km_driven", "kms_driven", "kilometers_driven"]:
-        if candidate in cols_lower:
-            row[cols_lower[candidate]] = int(km_driven)
-            break
-
-    # Fuel
-    fuel_val = normalize(fuel)
-    mapping_fuel = {
-        "petrol": "petrol",
-        "diesel": "diesel",
-        "cng": "cng",
-        "lpg": "lpg",
-        "electric": "electric",
-    }
-    if "fuel" in cols_lower:
-        row[cols_lower["fuel"]] = mapping_fuel.get(fuel_val, fuel_val)
-
-    # Seller Type
-    seller_val = normalize(seller_type)
-    mapping_seller = {
-        "individual": "individual",
-        "dealer": "dealer",
-        "trustmark dealer": "trustmark_dealer",
-    }
-    if "seller_type" in cols_lower:
-        row[cols_lower["seller_type"]] = mapping_seller.get(seller_val, seller_val)
-
-    # Transmission
-    trans_val = normalize(transmission)
-    mapping_trans = {"manual": "manual", "automatic": "automatic"}
-    if "transmission" in cols_lower:
-        row[cols_lower["transmission"]] = mapping_trans.get(trans_val, trans_val)
-
-    # Owner
-    owner_val = normalize(owner_type)
-    mapping_owner = {
-        "first owner": "first",
-        "second owner": "second",
-        "third owner": "third",
-        "fourth & above": "fourth & above",
-        "4th & above": "fourth & above",
-        "fourth and above": "fourth & above",
-    }
-    for candidate in ["owner", "owner_type"]:
-        if candidate in cols_lower:
-            row[cols_lower[candidate]] = mapping_owner.get(owner_val, owner_val)
-            break
-
-    # Coerce numeric vs categorical per model expectation
-    for col, kind in type_map.items():
-        if col not in row:
-            continue
-        if kind == "numeric":
-            try:
-                row[col] = pd.to_numeric(row[col], errors="coerce")
-            except Exception:
-                row[col] = np.nan
-        else:
-            if pd.isna(row[col]):
-                row[col] = ""
-            row[col] = str(row[col])
-
-    return pd.DataFrame([row], columns=required_cols)
-
-# ---------- Predict ----------
-if st.button("Predict Selling Price"):
-    input_df = build_input_row()
-    try:
-        pred = model.predict(input_df)[0]
-        st.success(f"**Predicted price:** {float(pred):,.2f}")
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
-
-st.caption("Tip: The app maps your selections to the model’s expected columns automatically (e.g., Year → year or car_age; Owner Type → owner).")
+# Preferred: categories from model; Fallback: curated list
+car_name_feature = detect_car_name_feature(cat_map)
+if car_name_feature:
+    car_options = sorted([c for c in cat_map.get(car_name_feature, []) if c and str(c_]()_

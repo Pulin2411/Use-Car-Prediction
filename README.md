@@ -103,6 +103,7 @@ Example metrics from a typical run (will vary by dataset split):
 - Tuned RandomForest: R2≈0.58, MAE≈1.50e5, MSE≈5.09e10
 
 These values indicate moderate explanatory power on the sample dataset and are included in the generated summary file for transparency.
+
 <img width="594" height="684" alt="image" src="https://github.com/user-attachments/assets/f0d60b10-615d-4d4b-8593-c32c1eb89be5" />
 <img width="571" height="637" alt="image" src="https://github.com/user-attachments/assets/f624c6c2-2057-4398-870d-d1bddead48d5" />
 <img width="586" height="684" alt="image" src="https://github.com/user-attachments/assets/174da519-2980-4873-a71b-534204263999" />

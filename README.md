@@ -106,13 +106,18 @@ These values indicate moderate explanatory power on the sample dataset and are i
 
 <img width="587" height="428" alt="image" src="https://github.com/user-attachments/assets/d8cf49d8-2475-4585-ab5b-112d3675db99" />
 
+
 <img width="596" height="460" alt="image" src="https://github.com/user-attachments/assets/fc737b9d-bcdc-46f2-8f8b-e8ec5009ec9f" />
+
 
 <img width="567" height="409" alt="image" src="https://github.com/user-attachments/assets/ea8f525e-6ab7-4985-8f01-89b8653e141c" />
 
+
 <img width="571" height="413" alt="image" src="https://github.com/user-attachments/assets/1d5a416b-32bd-4c44-8e1c-c261b67961f7" />
 
+
 <img width="570" height="407" alt="image" src="https://github.com/user-attachments/assets/5355aa3c-20a3-4c25-964c-ab62afe335c1" />
+
 
 <img width="583" height="414" alt="image" src="https://github.com/user-attachments/assets/215eb6ff-eed9-4b8f-9522-128ed8e87d45" />
 

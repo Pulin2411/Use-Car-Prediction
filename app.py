@@ -33,14 +33,8 @@ def load_model(path: str):
 
 # ---------- Introspection helpers ----------
 def _flatten_transformers(ct: ColumnTransformer) -> List[Tuple[str, Any, List[str]]]:
-    """
-    Returns a flat list of (name, transformer, columns) for a ColumnTransformer.
-    If a transformer is itself a Pipeline whose first step is a transformer,
-    we still surface its columns.
-    """
     flat = []
     for name, transformer, cols in ct.transformers:
-        # Skip 'drop' and 'remainder'
         if transformer == "drop":
             continue
         if isinstance(cols, (list, tuple, np.ndarray)):
@@ -48,63 +42,41 @@ def _flatten_transformers(ct: ColumnTransformer) -> List[Tuple[str, Any, List[st
         elif isinstance(cols, str):
             cols = [cols]
         else:
-            # Unknown spec; best effort
             cols = list(cols) if cols is not None else []
-
         flat.append((name, transformer, cols))
     return flat
 
 
 def _get_column_types_from_transformers(ct: ColumnTransformer) -> Dict[str, str]:
-    """
-    Best-effort guess: mark columns passed into OneHotEncoder as 'categorical',
-    and everything else as 'numeric' unless ambiguous.
-    """
     col_types: Dict[str, str] = {}
     for name, transformer, cols in _flatten_transformers(ct):
         enc = transformer
-        # If wrapped in a Pipeline, unwrap to the first actual transformer
         if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
             enc = transformer.steps[0][1]
-
         if isinstance(enc, OneHotEncoder):
             for c in cols:
                 col_types[c] = "categorical"
         else:
-            # If we haven't already marked it categorical, assume numeric.
             for c in cols:
                 col_types.setdefault(c, "numeric")
     return col_types
 
 
 def _get_ohe_categories(ct: ColumnTransformer) -> Dict[str, List[str]]:
-    """
-    If OneHotEncoder(s) are fitted, expose per-column category lists.
-    """
     result: Dict[str, List[str]] = {}
     for name, transformer, cols in _flatten_transformers(ct):
         enc = transformer
         if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
             enc = transformer.steps[0][1]
-
         if isinstance(enc, OneHotEncoder):
-            # categories_ exists only after fit
             if hasattr(enc, "categories_"):
                 for c, col in zip(enc.categories_, cols):
-                    # Cast to str for Streamlit selectbox stability
                     result[col] = [str(x) for x in list(c)]
     return result
 
 
 def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[str, List[str]]]:
-    """
-    Returns:
-      - required original input column names (order preserved per transformer blocks)
-      - a best-effort type map {col: 'numeric'|'categorical'}
-      - known categories for categoricals (if OHE is fitted) {col: [cats]}
-    """
     if isinstance(model, Pipeline):
-        # Find a ColumnTransformer in the pipeline (any step)
         preproc = None
         for _, step in model.steps:
             if isinstance(step, ColumnTransformer):
@@ -118,24 +90,19 @@ def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[st
         if preproc is None:
             raise ValueError("No ColumnTransformer found in the pipeline.")
 
-        # Collect columns in the order they appear in the CT
         required_cols: List[str] = []
         for _, _, cols in _flatten_transformers(preproc):
             required_cols.extend(cols)
 
-        # Types and categories
         type_map = _get_column_types_from_transformers(preproc)
         cat_map = _get_ohe_categories(preproc)
 
-        # Fallback if nothing found
         if not required_cols:
-            # Try model.feature_names_in_ (less reliable for pipelines)
             if hasattr(model, "feature_names_in_"):
                 required_cols = list(model.feature_names_in_)
             else:
                 raise ValueError(
-                    "Could not infer required input columns. "
-                    "Please provide a CSV with the original training column names."
+                    "Could not infer required input columns. Please provide a CSV with the original training column names."
                 )
 
         return required_cols, type_map, cat_map
@@ -151,7 +118,6 @@ def coerce_types(df: pd.DataFrame, type_map: Dict[str, str]) -> pd.DataFrame:
         if t == "numeric":
             df[col] = pd.to_numeric(df[col], errors="coerce")
         else:
-            # Categorical as string
             df[col] = df[col].astype(str)
     return df
 
@@ -165,7 +131,6 @@ MODEL_PATH = "best_model_GradientBoosting.pickle"
 with st.spinner("Loading model..."):
     model = load_model(MODEL_PATH)
 
-# Discover what the pipeline expects
 try:
     required_cols, type_map, cat_map = get_expected_input_schema(model)
 except Exception as e:
@@ -190,21 +155,22 @@ with st.form("single_inference"):
         inferred_type = type_map.get(col, "numeric")
         if inferred_type == "categorical":
             if col in cat_map and len(cat_map[col]) > 0:
-                # Use discovered categories
                 default = cat_map[col][0]
                 form_values[col] = st.selectbox(col, cat_map[col], index=0)
             else:
                 form_values[col] = st.text_input(col, value="")
         else:
             # Numeric input
-            form_values[col] = st.number_input(col, value=0.0, step=1.0, format="%.6f")
+            if col in ["km_driven", "car_age"]:
+                form_values[col] = st.number_input(col, min_value=0, step=1, format="%d")
+            else:
+                form_values[col] = st.number_input(col, value=0.0, step=1.0, format="%.6f")
 
     submitted = st.form_submit_button("Predict")
     if submitted:
         input_df = pd.DataFrame([form_values], columns=required_cols)
         input_df = coerce_types(input_df, type_map)
 
-        # Check for missing columns or NaNs after coercion
         missing = [c for c in required_cols if c not in input_df.columns]
         if missing:
             st.error(f"Missing columns: {missing}")
@@ -231,7 +197,6 @@ if uploaded is not None:
         st.error(f"Could not read CSV: {e}")
         st.stop()
 
-    # Validate columns
     missing_cols = [c for c in required_cols if c not in df.columns]
     extra_cols = [c for c in df.columns if c not in required_cols]
 
@@ -252,7 +217,6 @@ if uploaded is not None:
             st.success("Predictions complete.")
             st.dataframe(out.head(20))
 
-            # Offer download
             buf = io.BytesIO()
             out.to_csv(buf, index=False)
             st.download_button(
@@ -265,7 +229,5 @@ if uploaded is not None:
             st.error(f"Prediction failed: {e}")
 
 st.caption(
-    "If you still see a 'columns are missing' error, double-check that your column **names** "
-    "and **types** match the expected inputs above. The pipeline’s ColumnTransformer requires "
-    "an exact match to the training schema."
+    "If you still see a 'columns are missing' error, double-check that your column **names** and **types** match the expected inputs above. The pipeline’s ColumnTransformer requires an exact match to the training schema."
 )

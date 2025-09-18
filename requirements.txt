@@ -1,16 +1,4 @@
-# Core Dependencies
-streamlit
-pandas
-numpy==2.0.2
+streamlit==1.37.0
+pandas==2.2.2
+numpy==1.26.4
 scikit-learn==1.6.1
-
-
-
-# Visualization
-matplotlib==3.9.0
-
-# Web App Framework
-streamlit==1.36.0
-
-
-

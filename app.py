@@ -1,6 +1,6 @@
-import io
 import pickle
 import sys
+from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
 import numpy as np
@@ -10,8 +10,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 
-
-# ---------- Utilities to make unpickling more robust ----------
+# ---------- (Unpickling shim for some numpy builds) ----------
 try:
     import numpy as _np
     if "numpy._core" not in sys.modules:
@@ -19,17 +18,22 @@ try:
 except Exception:
     pass
 
+# ---------- Page ----------
+st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
+st.title("🚗 Used Car Price Prediction")
 
-# ---------- Load model ----------
+MODEL_PATH = "best_model_GradientBoosting.pickle"
+
 @st.cache_resource(show_spinner=True)
 def load_model(path: str):
     with open(path, "rb") as f:
-        model = pickle.load(f)
-    return model
+        return pickle.load(f)
 
+with st.spinner("Loading model..."):
+    model = load_model(MODEL_PATH)
 
-# ---------- Introspection helpers ----------
-def _flatten_transformers(ct: ColumnTransformer) -> List[Tuple[str, Any, List[str]]]:
+# ---------- Helpers to introspect expected columns from the pipeline ----------
+def _flatten_transformers(ct: ColumnTransformer):
     flat = []
     for name, transformer, cols in ct.transformers:
         if transformer == "drop":
@@ -43,12 +47,11 @@ def _flatten_transformers(ct: ColumnTransformer) -> List[Tuple[str, Any, List[st
         flat.append((name, transformer, cols))
     return flat
 
-
 def _get_column_types_from_transformers(ct: ColumnTransformer) -> Dict[str, str]:
     col_types: Dict[str, str] = {}
-    for name, transformer, cols in _flatten_transformers(ct):
+    for _, transformer, cols in _flatten_transformers(ct):
         enc = transformer
-        if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
+        if isinstance(transformer, Pipeline) and transformer.steps:
             enc = transformer.steps[0][1]
         if isinstance(enc, OneHotEncoder):
             for c in cols:
@@ -58,183 +61,165 @@ def _get_column_types_from_transformers(ct: ColumnTransformer) -> Dict[str, str]
                 col_types.setdefault(c, "numeric")
     return col_types
 
-
 def _get_ohe_categories(ct: ColumnTransformer) -> Dict[str, List[str]]:
     result: Dict[str, List[str]] = {}
-    for name, transformer, cols in _flatten_transformers(ct):
+    for _, transformer, cols in _flatten_transformers(ct):
         enc = transformer
-        if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
+        if isinstance(transformer, Pipeline) and transformer.steps:
             enc = transformer.steps[0][1]
-        if isinstance(enc, OneHotEncoder):
-            if hasattr(enc, "categories_"):
-                for c, col in zip(enc.categories_, cols):
-                    result[col] = [str(x) for x in list(c)]
+        if isinstance(enc, OneHotEncoder) and hasattr(enc, "categories_"):
+            for cats, col in zip(enc.categories_, cols):
+                result[col] = [str(x) for x in list(cats)]
     return result
 
-
 def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[str, List[str]]]:
-    if isinstance(model, Pipeline):
-        preproc = None
-        for _, step in model.steps:
-            if isinstance(step, ColumnTransformer):
-                preproc = step
-                break
-            if isinstance(step, Pipeline):
-                for _, inner in step.steps:
-                    if isinstance(inner, ColumnTransformer):
-                        preproc = inner
-                        break
-        if preproc is None:
-            raise ValueError("No ColumnTransformer found in the pipeline.")
+    if not isinstance(model, Pipeline):
+        raise ValueError("Expected an sklearn Pipeline object.")
+    preproc = None
+    for _, step in model.steps:
+        if isinstance(step, ColumnTransformer):
+            preproc = step
+            break
+        if isinstance(step, Pipeline):
+            for _, inner in step.steps:
+                if isinstance(inner, ColumnTransformer):
+                    preproc = inner
+                    break
+    if preproc is None:
+        raise ValueError("No ColumnTransformer found in the pipeline.")
 
-        required_cols: List[str] = []
-        for _, _, cols in _flatten_transformers(preproc):
-            required_cols.extend(cols)
+    required_cols: List[str] = []
+    for _, _, cols in _flatten_transformers(preproc):
+        required_cols.extend(cols)
 
-        type_map = _get_column_types_from_transformers(preproc)
-        cat_map = _get_ohe_categories(preproc)
+    type_map = _get_column_types_from_transformers(preproc)
+    cat_map = _get_ohe_categories(preproc)
 
-        if not required_cols:
-            if hasattr(model, "feature_names_in_"):
-                required_cols = list(model.feature_names_in_)
-            else:
-                raise ValueError(
-                    "Could not infer required input columns. Please provide a CSV with the original training column names."
-                )
-
-        return required_cols, type_map, cat_map
-
-    raise ValueError("Expected an sklearn Pipeline object.")
-
-
-def coerce_types(df: pd.DataFrame, type_map: Dict[str, str]) -> pd.DataFrame:
-    df = df.copy()
-    for col, t in type_map.items():
-        if col not in df.columns:
-            continue
-        if t == "numeric":
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    if not required_cols:
+        if hasattr(model, "feature_names_in_"):
+            required_cols = list(model.feature_names_in_)
         else:
-            df[col] = df[col].astype(str)
-    return df
+            raise ValueError("Could not infer required input columns from the model.")
 
+    return required_cols, type_map, cat_map
 
-# ---------- Streamlit app ----------
-st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
-st.title("🚗 Used Car Price Prediction")
-
-MODEL_PATH = "best_model_GradientBoosting.pickle"
-
-with st.spinner("Loading model..."):
-    model = load_model(MODEL_PATH)
-
+# Get model schema
 try:
     required_cols, type_map, cat_map = get_expected_input_schema(model)
 except Exception as e:
     st.error(f"Could not introspect model input schema: {e}")
     st.stop()
 
-with st.expander("Expected input columns (from the trained pipeline)", expanded=False):
-    st.write(pd.DataFrame({
-        "column": required_cols,
-        "type (best-effort)": [type_map.get(c, "unknown") for c in required_cols],
-        "known categories (if any)": [", ".join(cat_map.get(c, [])) for c in required_cols],
-    }))
+# ---------- UI (matches the screenshot) ----------
+# Left column: car name, year, km driven, fuel
+# Right column: seller type, transmission, owner
+left, right = st.columns(2)
 
-st.markdown("### Enter values below **or** upload a CSV with exactly these columns.")
+with left:
+    car_name = st.text_input("Car Name (for display)", value="Maruti Swift")
+    year = st.number_input("Year", min_value=1980, max_value=datetime.now().year, value=2015, step=1, format="%d")
+    km_driven = st.number_input("KM Driven", min_value=0, value=50000, step=500, format="%d")
+    fuel = st.selectbox("Fuel Type", ["Petrol", "Diesel", "CNG", "LPG", "Electric"])
 
-# ---- Option A: form entry for a single prediction ----
-with st.form("single_inference"):
-    st.subheader("Single prediction (form)")
+with right:
+    seller_type = st.selectbox("Seller Type", ["Individual", "Dealer", "Trustmark Dealer"])
+    transmission = st.selectbox("Transmission", ["Manual", "Automatic"])
+    owner_type = st.selectbox("Owner Type", ["First Owner", "Second Owner", "Third Owner", "Fourth & Above"])
 
-    form_values = {}
-    for col in required_cols:
-        inferred_type = type_map.get(col, "numeric")
-        if inferred_type == "categorical":
-            if col in cat_map and len(cat_map[col]) > 0:
-                default = cat_map[col][0]
-                form_values[col] = st.selectbox(col, cat_map[col], index=0)
-            else:
-                # Hardcode dropdowns for known categorical fields
-                if col.lower() == "fuel":
-                    form_values[col] = st.selectbox(col, ["petrol", "diesel", "cng", "lpg", "electric"])
-                elif col.lower() == "seller_type":
-                    form_values[col] = st.selectbox(col, ["individual", "dealer", "trustmark_dealer"])
-                elif col.lower() == "transmission":
-                    form_values[col] = st.selectbox(col, ["manual", "automatic"])
-                elif col.lower() == "owner":
-                    form_values[col] = st.selectbox(col, ["first", "second", "third", "fourth & above"])
-                else:
-                    form_values[col] = st.text_input(col, value="")
-        else:
-            # Numeric input
-            if col in ["km_driven", "car_age"]:
-                form_values[col] = st.number_input(col, min_value=0, step=1, format="%d")
-            else:
-                form_values[col] = st.number_input(col, value=0.0, step=1.0, format="%.6f")
+# ---------- Build one row that matches the model's required columns ----------
+def normalize(s: str) -> str:
+    return s.strip().lower()
 
-    submitted = st.form_submit_button("Predict")
-    if submitted:
-        input_df = pd.DataFrame([form_values], columns=required_cols)
-        input_df = coerce_types(input_df, type_map)
+def build_input_row() -> pd.DataFrame:
+    # Start with an empty row for all required columns
+    row = {c: np.nan for c in required_cols}
 
-        missing = [c for c in required_cols if c not in input_df.columns]
-        if missing:
-            st.error(f"Missing columns: {missing}")
-        else:
-            if input_df.isna().any().any():
-                st.warning("Some numeric fields were invalid and coerced to NaN; the model/imputer will handle them if configured.")
+    # Possible column name variants (lowercased)
+    cols_lower = {c.lower(): c for c in required_cols}
+
+    # Car name (if model expects it)
+    for candidate in ["car_name", "name", "car"]:
+        if candidate in cols_lower:
+            row[cols_lower[candidate]] = car_name
+
+    # Year / Age
+    if "year" in cols_lower:
+        row[cols_lower["year"]] = int(year)
+    elif "car_age" in cols_lower:
+        row[cols_lower["car_age"]] = int(max(0, datetime.now().year - int(year)))
+
+    # Kilometers driven
+    for candidate in ["km_driven", "kms_driven", "kilometers_driven"]:
+        if candidate in cols_lower:
+            row[cols_lower[candidate]] = int(km_driven)
+            break
+
+    # Fuel
+    fuel_val = normalize(fuel)
+    mapping_fuel = {
+        "petrol": "petrol",
+        "diesel": "diesel",
+        "cng": "cng",
+        "lpg": "lpg",
+        "electric": "electric",
+    }
+    if "fuel" in cols_lower:
+        row[cols_lower["fuel"]] = mapping_fuel.get(fuel_val, fuel_val)
+
+    # Seller Type
+    seller_val = normalize(seller_type)
+    mapping_seller = {
+        "individual": "individual",
+        "dealer": "dealer",
+        "trustmark dealer": "trustmark_dealer",
+    }
+    if "seller_type" in cols_lower:
+        row[cols_lower["seller_type"]] = mapping_seller.get(seller_val, seller_val)
+
+    # Transmission
+    trans_val = normalize(transmission)
+    mapping_trans = {"manual": "manual", "automatic": "automatic"}
+    if "transmission" in cols_lower:
+        row[cols_lower["transmission"]] = mapping_trans.get(trans_val, trans_val)
+
+    # Owner
+    owner_val = normalize(owner_type)
+    mapping_owner = {
+        "first owner": "first",
+        "second owner": "second",
+        "third owner": "third",
+        "fourth & above": "fourth & above",
+        "4th & above": "fourth & above",
+        "fourth and above": "fourth & above",
+    }
+    for candidate in ["owner", "owner_type"]:
+        if candidate in cols_lower:
+            row[cols_lower[candidate]] = mapping_owner.get(owner_val, owner_val)
+            break
+
+    # Coerce numeric vs categorical per model expectation
+    for col, kind in type_map.items():
+        if col not in row:
+            continue
+        if kind == "numeric":
             try:
-                pred = model.predict(input_df)[0]
-                st.success(f"**Predicted price:** {float(pred):,.2f}")
-            except Exception as e:
-                st.error(f"Prediction failed: {e}")
+                row[col] = pd.to_numeric(row[col], errors="coerce")
+            except Exception:
+                row[col] = np.nan
+        else:
+            if pd.isna(row[col]):
+                row[col] = ""
+            row[col] = str(row[col])
 
-st.divider()
+    return pd.DataFrame([row], columns=required_cols)
 
-# ---- Option B: batch prediction from CSV ----
-st.subheader("Batch prediction (CSV)")
-uploaded = st.file_uploader("Upload a CSV with exactly the expected columns (case-sensitive column names).", type=["csv"])
-
-if uploaded is not None:
+# ---------- Predict ----------
+if st.button("Predict Selling Price"):
+    input_df = build_input_row()
     try:
-        df = pd.read_csv(uploaded)
-        st.write("Preview:", df.head())
+        pred = model.predict(input_df)[0]
+        st.success(f"**Predicted price:** {float(pred):,.2f}")
     except Exception as e:
-        st.error(f"Could not read CSV: {e}")
-        st.stop()
+        st.error(f"Prediction failed: {e}")
 
-    missing_cols = [c for c in required_cols if c not in df.columns]
-    extra_cols = [c for c in df.columns if c not in required_cols]
-
-    if missing_cols:
-        st.error(f"CSV is missing required columns: {missing_cols}")
-        st.info("Tip: Rename columns to match the expected names shown above.")
-    else:
-        if extra_cols:
-            st.warning(f"CSV has extra columns that will be ignored: {extra_cols}")
-            df = df[required_cols]
-
-        df = coerce_types(df, type_map)
-
-        try:
-            preds = model.predict(df)
-            out = df.copy()
-            out["prediction"] = preds
-            st.success("Predictions complete.")
-            st.dataframe(out.head(20))
-
-            buf = io.BytesIO()
-            out.to_csv(buf, index=False)
-            st.download_button(
-                "Download predictions as CSV",
-                data=buf.getvalue(),
-                file_name="predictions.csv",
-                mime="text/csv",
-            )
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
-
-st.caption(
-    "If you still see a 'columns are missing' error, double-check that your column **names** and **types** match the expected inputs above. The pipeline’s ColumnTransformer requires an exact match to the training schema."
-)
+st.caption("Tip: The app maps your selections to the model’s expected columns automatically (e.g., Year → year or car_age; Owner Type → owner).")

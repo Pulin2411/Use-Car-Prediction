@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-# ---- Page setup (same title/content) ----
+# ---- Page setup ----
 st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="wide")
 st.markdown("""
 <style>
@@ -64,6 +64,12 @@ h1, h2, h3 { letter-spacing: .2px; }
 .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown(
+    "<div class='hero'><span style='font-size:1.6rem'>🚗</span>"
+    "<div><div style='font-size:1.4rem; font-weight:700;'>Used Car Price Prediction</div></div></div>",
+    unsafe_allow_html=True
+)
 
 MODEL_PATH = "best_model_GradientBoosting.pickle"
 
@@ -154,7 +160,7 @@ except Exception as e:
     st.error(f"Could not introspect model input schema: {e}")
     st.stop()
 
-# ---------- Build car-name dropdown options (unchanged content) ----------
+# ---------- Build car-name dropdown options ----------
 def detect_car_name_feature(cat_map: Dict[str, List[str]]) -> str:
     candidates = ["car_name", "name", "car", "model", "car_model", "brand_model"]
     lower_keys = {k.lower(): k for k in cat_map.keys()}
@@ -178,13 +184,12 @@ else:
         "Renault Kwid", "Skoda Rapid", "Volkswagen Polo"
     ]
 
-# ---------- LAYOUT-ONLY CHANGES BELOW ----------
+# ---------- Layout ----------
 left, right = st.columns([1.25, 1])
 
 with left:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.markdown("<div class='card-title'>Vehicle Details</div>", unsafe_allow_html=True)
-    # (same widgets / same labels / same options)
     car_name = st.selectbox("Car Name (for display)", car_options, index=car_options.index("Maruti Swift") if "Maruti Swift" in car_options else 0)
     year = st.number_input("Year", min_value=1980, max_value=datetime.now().year, value=2015, step=1, format="%d")
     km_driven = st.number_input("KM Driven", min_value=0, value=50000, step=500, format="%d")
@@ -205,12 +210,11 @@ with left:
 with right:
     st.markdown("<div class='card sticky'>", unsafe_allow_html=True)
     st.markdown("<div class='card-title'>Prediction</div>", unsafe_allow_html=True)
-    # (the result gets filled after click)
     result_container = st.empty()
     st.caption("Tip: Car Name is a dropdown. If your model includes a car-name feature, options are loaded from it automatically.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------- Build input row for the model (unchanged logic) ----------
+# ---------- Build input row ----------
 def normalize(s: str) -> str:
     return str(s).strip().lower()
 
@@ -218,58 +222,48 @@ def build_input_row() -> pd.DataFrame:
     row = {c: np.nan for c in required_cols}
     cols_lower = {c.lower(): c for c in required_cols}
 
-    # Car name
     for candidate in ["car_name", "name", "car", "model", "car_model", "brand_model"]:
         if candidate in cols_lower:
             row[cols_lower[candidate]] = car_name
             break
 
-    # Year / Age
     if "year" in cols_lower:
         row[cols_lower["year"]] = int(year)
     elif "car_age" in cols_lower:
         row[cols_lower["car_age"]] = int(max(0, datetime.now().year - int(year)))
 
-    # Kilometers driven
     for candidate in ["km_driven", "kms_driven", "kilometers_driven"]:
         if candidate in cols_lower:
             row[cols_lower[candidate]] = int(km_driven)
             break
 
-    # Fuel
     fuel_val = normalize(fuel)
     fuel_map = {"petrol": "petrol", "diesel": "diesel", "cng": "cng", "lpg": "lpg", "electric": "electric"}
     if "fuel" in cols_lower:
         row[cols_lower["fuel"]] = fuel_map.get(fuel_val, fuel_val)
 
-    # Seller Type
     seller_val = normalize(seller_type)
     seller_map = {"individual": "individual", "dealer": "dealer", "trustmark dealer": "trustmark_dealer"}
     if "seller_type" in cols_lower:
         row[cols_lower["seller_type"]] = seller_map.get(seller_val, seller_val)
 
-    # Transmission
     trans_val = normalize(transmission)
     trans_map = {"manual": "manual", "automatic": "automatic"}
     if "transmission" in cols_lower:
         row[cols_lower["transmission"]] = trans_map.get(trans_val, trans_val)
 
-    # Owner
     owner_val = normalize(owner_type)
     owner_map = {
         "first owner": "first",
         "second owner": "second",
         "third owner": "third",
         "fourth & above": "fourth & above",
-        "4th & above": "fourth & above",
-        "fourth and above": "fourth & above",
     }
     for candidate in ["owner", "owner_type"]:
         if candidate in cols_lower:
             row[cols_lower[candidate]] = owner_map.get(owner_val, owner_val)
             break
 
-    # Coerce numeric/categorical per expected types
     for col, kind in type_map.items():
         if col not in row:
             continue
@@ -285,7 +279,7 @@ def build_input_row() -> pd.DataFrame:
 
     return pd.DataFrame([row], columns=required_cols)
 
-# ---------- Predict (unchanged behavior; just writes into the right panel) ----------
+# ---------- Predict ----------
 if predict_clicked:
     input_df = build_input_row()
     try:

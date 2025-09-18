@@ -1,240 +1,314 @@
-import io
+# app.py
+# Streamlit app for car price prediction with "name" (car name) as a dropdown
+# Works with an sklearn Pipeline (e.g., ColumnTransformer + OneHotEncoder + model)
+# Place this file alongside: best_model_GradientBoosting.pickle
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import os
 import pickle
-import sys
-from typing import Dict, List, Tuple, Any
+from typing import List, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.pipeline import Pipeline
 
 
-# ---------- Utilities to make unpickling more robust ----------
-try:
-    import numpy as _np
-    if "numpy._core" not in sys.modules:
-        sys.modules["numpy._core"] = _np.core
-except Exception:
-    pass
+# -----------------------------
+# Config
+# -----------------------------
+st.set_page_config(page_title="Car Price Predictor", page_icon="🚗", layout="centered")
 
 
-# ---------- Load model ----------
+# -----------------------------
+# Utilities
+# -----------------------------
 @st.cache_resource(show_spinner=True)
-def load_model(path: str):
-    with open(path, "rb") as f:
-        model = pickle.load(f)
-    return model
+def load_model(pickle_path: str):
+    with open(pickle_path, "rb") as f:
+        return pickle.load(f)
 
 
-# ---------- Introspection helpers ----------
-def _flatten_transformers(ct: ColumnTransformer) -> List[Tuple[str, Any, List[str]]]:
-    flat = []
-    for name, transformer, cols in ct.transformers:
-        if transformer == "drop":
-            continue
-        if isinstance(cols, (list, tuple, np.ndarray)):
-            cols = list(cols)
-        elif isinstance(cols, str):
-            cols = [cols]
-        else:
-            cols = list(cols) if cols is not None else []
-        flat.append((name, transformer, cols))
-    return flat
+def _flatten(l):
+    return [item for sub in l for item in (sub if isinstance(sub, (list, tuple)) else [sub])]
 
 
-def _get_column_types_from_transformers(ct: ColumnTransformer) -> Dict[str, str]:
-    col_types: Dict[str, str] = {}
-    for name, transformer, cols in _flatten_transformers(ct):
-        enc = transformer
-        if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
-            enc = transformer.steps[0][1]
-        if isinstance(enc, OneHotEncoder):
-            for c in cols:
-                col_types[c] = "categorical"
-        else:
-            for c in cols:
-                col_types.setdefault(c, "numeric")
-    return col_types
+def try_get_preprocessor_and_model(pipeline: Any) -> Tuple[Optional[Any], Optional[Any]]:
+    """
+    Try to split a composite sklearn Pipeline into (preprocessor, estimator).
+    Returns (preprocessor, final_estimator) or (None, pipeline) if unknown.
+    """
+    # Common patterns:
+    # 1) Pipeline(steps=[("preprocessor", coltx), ("model", estimator)])
+    # 2) Direct estimator (no pipeline)
+    try:
+        if hasattr(pipeline, "named_steps"):
+            pre = pipeline.named_steps.get("preprocessor") or pipeline.named_steps.get("prep")
+            est = pipeline.named_steps.get("model") or pipeline.named_steps.get("regressor") or pipeline.steps[-1][1]
+            return pre, est
+        # Some people wrap ColumnTransformer directly; then the final model may be inside another object.
+        return None, pipeline
+    except Exception:
+        return None, pipeline
 
 
-def _get_ohe_categories(ct: ColumnTransformer) -> Dict[str, List[str]]:
-    result: Dict[str, List[str]] = {}
-    for name, transformer, cols in _flatten_transformers(ct):
-        enc = transformer
-        if isinstance(transformer, Pipeline) and len(transformer.steps) > 0:
-            enc = transformer.steps[0][1]
-        if isinstance(enc, OneHotEncoder):
-            if hasattr(enc, "categories_"):
-                for c, col in zip(enc.categories_, cols):
-                    result[col] = [str(x) for x in list(c)]
-    return result
+def find_input_columns(preprocessor: Any) -> List[str]:
+    """
+    Best-effort extraction of original input column names from a ColumnTransformer.
+    """
+    cols = []
+    if preprocessor is None:
+        return cols
+
+    try:
+        # ColumnTransformer has .transformers or .transformers_
+        transformers = getattr(preprocessor, "transformers_", None) or getattr(preprocessor, "transformers", [])
+        for name, transformer, columns in transformers:
+            # columns can be a list of names, a single name, or a callable
+            if callable(columns):
+                continue
+            if isinstance(columns, (list, tuple, np.ndarray, pd.Index)):
+                cols.extend([c for c in columns if isinstance(c, str)])
+            elif isinstance(columns, str):
+                cols.append(columns)
+    except Exception:
+        pass
+
+    # unique and keep order
+    seen = set()
+    ordered = []
+    for c in cols:
+        if c not in seen:
+            seen.add(c)
+            ordered.append(c)
+    return ordered
 
 
-def get_expected_input_schema(model) -> Tuple[List[str], Dict[str, str], Dict[str, List[str]]]:
-    if isinstance(model, Pipeline):
-        preproc = None
-        for _, step in model.steps:
-            if isinstance(step, ColumnTransformer):
-                preproc = step
-                break
-            if isinstance(step, Pipeline):
-                for _, inner in step.steps:
-                    if isinstance(inner, ColumnTransformer):
-                        preproc = inner
-                        break
-        if preproc is None:
-            raise ValueError("No ColumnTransformer found in the pipeline.")
+def get_onehot_categories_for_column(preprocessor: Any, column_name: str) -> List[str]:
+    """
+    Attempts to locate a OneHotEncoder in the ColumnTransformer and return categories
+    for the given original input column (before encoding).
+    """
+    if preprocessor is None:
+        return []
 
-        required_cols: List[str] = []
-        for _, _, cols in _flatten_transformers(preproc):
-            required_cols.extend(cols)
+    try:
+        transformers = getattr(preprocessor, "transformers_", None) or getattr(preprocessor, "transformers", [])
+        for name, transformer, columns in transformers:
+            # Some transformers can be Pipelines themselves
+            inner = transformer
+            if hasattr(transformer, "named_steps"):
+                # e.g., Pipeline([("imputer", ...), ("ohe", OneHotEncoder(...))])
+                # We want the OneHotEncoder inside if present
+                for step_name, step in transformer.named_steps.items():
+                    if step.__class__.__name__.lower().startswith("onehotencoder"):
+                        ohe = step
+                        # map categories back to the columns list
+                        cols_list = columns if isinstance(columns, (list, tuple, pd.Index, np.ndarray)) else [columns]
+                        if column_name in cols_list:
+                            idx = list(cols_list).index(column_name)
+                            cats = ohe.categories_[idx] if idx < len(ohe.categories_) else []
+                            return list(cats)
+                inner = list(transformer.named_steps.values())[-1]  # fallthrough: last step
 
-        type_map = _get_column_types_from_transformers(preproc)
-        cat_map = _get_ohe_categories(preproc)
+            # If the transformer itself is an OneHotEncoder
+            if inner.__class__.__name__.lower().startswith("onehotencoder"):
+                ohe = inner
+                cols_list = columns if isinstance(columns, (list, tuple, pd.Index, np.ndarray)) else [columns]
+                if column_name in cols_list:
+                    idx = list(cols_list).index(column_name)
+                    cats = ohe.categories_[idx] if idx < len(ohe.categories_) else []
+                    return list(cats)
+    except Exception:
+        pass
 
-        if not required_cols:
-            if hasattr(model, "feature_names_in_"):
-                required_cols = list(model.feature_names_in_)
-            else:
-                raise ValueError(
-                    "Could not infer required input columns. Please provide a CSV with the original training column names."
-                )
-
-        return required_cols, type_map, cat_map
-
-    raise ValueError("Expected an sklearn Pipeline object.")
-
-
-def coerce_types(df: pd.DataFrame, type_map: Dict[str, str]) -> pd.DataFrame:
-    df = df.copy()
-    for col, t in type_map.items():
-        if col not in df.columns:
-            continue
-        if t == "numeric":
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-        else:
-            df[col] = df[col].astype(str)
-    return df
+    return []
 
 
-# ---------- Streamlit app ----------
-st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
-st.title("🚗 Used Car Price Prediction")
+def default_feature_schema(existing_cols: List[str]) -> List[str]:
+    """
+    If we couldn't detect full input schema, fall back to a common car-price dataset schema.
+    Preserve any detected column order and append missing known columns at the end.
+    """
+    common = [
+        "name", "year", "km_driven", "fuel", "seller_type",
+        "transmission", "owner", "mileage", "engine", "max_power", "seats"
+    ]
+    merged = []
+    seen = set()
+    # keep detected order first
+    for c in existing_cols:
+        if isinstance(c, str) and c not in seen:
+            merged.append(c); seen.add(c)
+    # append common ones not present
+    for c in common:
+        if c not in seen:
+            merged.append(c); seen.add(c)
+    return merged
 
+
+# -----------------------------
+# Load model
+# -----------------------------
 MODEL_PATH = "best_model_GradientBoosting.pickle"
-
-with st.spinner("Loading model..."):
-    model = load_model(MODEL_PATH)
-
-try:
-    required_cols, type_map, cat_map = get_expected_input_schema(model)
-except Exception as e:
-    st.error(f"Could not introspect model input schema: {e}")
+if not os.path.exists(MODEL_PATH):
+    st.error(f"Model file not found at '{MODEL_PATH}'. Please place your pickle next to this app.")
     st.stop()
 
-with st.expander("Expected input columns (from the trained pipeline)", expanded=False):
-    st.write(pd.DataFrame({
-        "column": required_cols,
-        "type (best-effort)": [type_map.get(c, "unknown") for c in required_cols],
-        "known categories (if any)": [", ".join(cat_map.get(c, [])) for c in required_cols],
-    }))
+try:
+    model = load_model(MODEL_PATH)
+except Exception as e:
+    st.error(
+        "Couldn't load the model pickle. Ensure you run this with the same major versions of "
+        "NumPy / scikit-learn used to train the model.\n\n"
+        f"Loader error:\n{e}"
+    )
+    st.stop()
 
-st.markdown("### Enter values below **or** upload a CSV with exactly these columns.")
+preprocessor, final_estimator = try_get_preprocessor_and_model(model)
+input_cols = find_input_columns(preprocessor)
+required_cols = default_feature_schema(input_cols)
 
-# ---- Option A: form entry for a single prediction ----
+# -----------------------------
+# Sidebar
+# -----------------------------
+with st.sidebar:
+    st.header("⚙️ Settings")
+    st.caption("If your model doesn't expose car names, paste them below to populate the dropdown.")
+    car_names_csv = st.text_area(
+        "Car names (comma-separated)",
+        value="",
+        placeholder="Alto 800, Baleno, Swift, i20, Creta, City, ...",
+    )
+    user_car_names = [x.strip() for x in car_names_csv.split(",") if x.strip()]
+
+    st.markdown("---")
+    st.caption("Optional: predict from a CSV (one row per car). "
+               "CSV must include the same input columns used by your model.")
+    uploaded_csv = st.file_uploader("Upload CSV for batch prediction", type=["csv"], accept_multiple_files=False)
+
+# Try to extract categories for 'name' from the fitted encoder (if present)
+model_car_name_options = get_onehot_categories_for_column(preprocessor, "name")
+
+# -----------------------------
+# Page Header
+# -----------------------------
+st.title("🚗 Car Price Predictor")
+st.write(
+    "Select the **car name** from a dropdown and fill the rest of the features. "
+    "This app will use your trained model to predict the price."
+)
+
+# -----------------------------
+# Single Prediction Form
+# -----------------------------
+st.subheader("Single Prediction")
+
+form_values = {}
 with st.form("single_inference"):
-    st.subheader("Single prediction (form)")
-
-    form_values = {}
     for col in required_cols:
-        inferred_type = type_map.get(col, "numeric")
-        if inferred_type == "categorical":
-            if col in cat_map and len(cat_map[col]) > 0:
-                default = cat_map[col][0]
-                form_values[col] = st.selectbox(col, cat_map[col], index=0)
+        # Simple heuristic to choose widget types
+        cl = col.lower()
+
+        # --- Special handling for 'name' (car name) ---
+        if cl == "name":
+            options = model_car_name_options or user_car_names
+            if options:
+                form_values[col] = st.selectbox("name", options, index=0)
             else:
-                # Hardcode dropdowns for known categorical fields
-                if col.lower() == "fuel":
-                    form_values[col] = st.selectbox(col, ["petrol", "diesel", "cng", "lpg", "electric"])
-                elif col.lower() == "seller_type":
-                    form_values[col] = st.selectbox(col, ["individual", "dealer", "trustmark_dealer"])
-                elif col.lower() == "transmission":
-                    form_values[col] = st.selectbox(col, ["manual", "automatic"])
-                elif col.lower() == "owner":
-                    form_values[col] = st.selectbox(col, ["first", "second", "third", "fourth & above"])
-                else:
-                    form_values[col] = st.text_input(col, value="")
+                form_values[col] = st.text_input("name", value="")
+            continue
+
+        # Known categoricals
+        if cl in ["fuel", "seller_type", "transmission", "owner"]:
+            if cl == "fuel":
+                form_values[col] = st.selectbox("fuel", ["petrol", "diesel", "cng", "lpg", "electric"])
+            elif cl == "seller_type":
+                form_values[col] = st.selectbox("seller_type", ["individual", "dealer", "trustmark_dealer"])
+            elif cl == "transmission":
+                form_values[col] = st.selectbox("transmission", ["manual", "automatic"])
+            elif cl == "owner":
+                form_values[col] = st.selectbox("owner", ["first", "second", "third", "fourth & above"])
+            continue
+
+        # Numeric-ish columns (int)
+        if cl in ["year", "km_driven", "seats"]:
+            step = 1
+            min_val = 0 if cl != "year" else 1990
+            default_val = 2015 if cl == "year" else 0
+            form_values[col] = st.number_input(col, min_value=min_val, step=step, value=default_val, format="%d")
+            continue
+
+        # Numeric-ish columns (float)
+        if cl in ["mileage", "engine", "max_power"]:
+            # Allow floats; defaults reasonable
+            defaults = {"mileage": 18.0, "engine": 1197.0, "max_power": 82.0}
+            form_values[col] = st.number_input(col, value=float(defaults.get(cl, 0.0)))
+            continue
+
+        # Fallbacks: try numeric, else text
+        # We'll guess numeric if model categories include this column elsewhere (they won't) => use text by default
+        # To be safe, use number for unknowns that look numeric by name:
+        if any(tok in cl for tok in ["price", "power", "mileage", "engine", "bhp", "torque", "cc"]):
+            form_values[col] = st.number_input(col, value=0.0)
         else:
-            # Numeric input
-            if col in ["km_driven", "car_age"]:
-                form_values[col] = st.number_input(col, min_value=0, step=1, format="%d")
-            else:
-                form_values[col] = st.number_input(col, value=0.0, step=1.0, format="%.6f")
+            form_values[col] = st.text_input(col, value="")
 
     submitted = st.form_submit_button("Predict")
-    if submitted:
-        input_df = pd.DataFrame([form_values], columns=required_cols)
-        input_df = coerce_types(input_df, type_map)
 
-        missing = [c for c in required_cols if c not in input_df.columns]
-        if missing:
-            st.error(f"Missing columns: {missing}")
-        else:
-            if input_df.isna().any().any():
-                st.warning("Some numeric fields were invalid and coerced to NaN; the model/imputer will handle them if configured.")
-            try:
-                pred = model.predict(input_df)[0]
-                st.success(f"**Predicted price:** {float(pred):,.2f}")
-            except Exception as e:
-                st.error(f"Prediction failed: {e}")
-
-st.divider()
-
-# ---- Option B: batch prediction from CSV ----
-st.subheader("Batch prediction (CSV)")
-uploaded = st.file_uploader("Upload a CSV with exactly the expected columns (case-sensitive column names).", type=["csv"])
-
-if uploaded is not None:
+if submitted:
     try:
-        df = pd.read_csv(uploaded)
-        st.write("Preview:", df.head())
+        row_df = pd.DataFrame([form_values])  # single row
+        pred = model.predict(row_df)[0]
+        st.success(f"💰 Predicted Price: **{pred:,.2f}**")
+        with st.expander("Show input row"):
+            st.dataframe(row_df)
     except Exception as e:
-        st.error(f"Could not read CSV: {e}")
-        st.stop()
+        st.error("Prediction failed. Please ensure your inputs match the model's training schema.")
+        st.exception(e)
 
-    missing_cols = [c for c in required_cols if c not in df.columns]
-    extra_cols = [c for c in df.columns if c not in required_cols]
+# -----------------------------
+# Batch Prediction
+# -----------------------------
+st.subheader("Batch Prediction (CSV)")
+if uploaded_csv is not None:
+    try:
+        df = pd.read_csv(uploaded_csv)
+        st.write("Preview of uploaded data:")
+        st.dataframe(df.head(20))
 
-    if missing_cols:
-        st.error(f"CSV is missing required columns: {missing_cols}")
-        st.info("Tip: Rename columns to match the expected names shown above.")
-    else:
-        if extra_cols:
-            st.warning(f"CSV has extra columns that will be ignored: {extra_cols}")
-            df = df[required_cols]
+        # If 'name' is present and user provided a custom list, optionally validate entries
+        if "name" in df.columns and (model_car_name_options or user_car_names):
+            valid_names = set(model_car_name_options or user_car_names)
+            invalid = df.loc[~df["name"].astype(str).isin(valid_names), "name"].unique().tolist()
+            if invalid:
+                st.warning(
+                    "Some 'name' values are not in the dropdown list. "
+                    "The model may still handle them if it was trained that way.\n\n"
+                    f"Out-of-list examples: {invalid[:10]}"
+                )
 
-        df = coerce_types(df, type_map)
+        preds = model.predict(df)
+        out = df.copy()
+        out["predicted_price"] = preds
+        st.success("Batch prediction complete.")
+        st.dataframe(out.head(50))
 
-        try:
-            preds = model.predict(df)
-            out = df.copy()
-            out["prediction"] = preds
-            st.success("Predictions complete.")
-            st.dataframe(out.head(20))
+        # Offer download
+        csv_bytes = out.to_csv(index=False).encode("utf-8")
+        st.download_button("Download predictions CSV", csv_bytes, file_name="predictions.csv", mime="text/csv")
 
-            buf = io.BytesIO()
-            out.to_csv(buf, index=False)
-            st.download_button(
-                "Download predictions as CSV",
-                data=buf.getvalue(),
-                file_name="predictions.csv",
-                mime="text/csv",
-            )
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
+    except Exception as e:
+        st.error("Batch prediction failed. Ensure the CSV columns match your model's training schema.")
+        st.exception(e)
 
+
+# -----------------------------
+# Footer
+# -----------------------------
+st.markdown("---")
 st.caption(
-    "If you still see a 'columns are missing' error, double-check that your column **names** and **types** match the expected inputs above. The pipeline’s ColumnTransformer requires an exact match to the training schema."
+    "Tip: If the **name** dropdown is empty, paste your list of car names in the sidebar. "
+    "If your model's preprocessor exposes categories for 'name', they'll appear automatically."
 )

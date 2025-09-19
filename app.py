@@ -21,7 +21,7 @@ except Exception:
 
 # ---- Page setup ----
 st.set_page_config(
-    page_title="🚗 Use Car Predictor By Pulin",
+    page_title="🚗 Used Car Predictor By Pulin",
     page_icon="🚗",
     layout="wide"
 )

@@ -31,7 +31,7 @@ st.markdown(
     """
     <div class="app-header" id="appHeader">
         <span class="logo">🚗</span>
-        <span class="title">Use Car Predictor By Pulin</span>
+        <span class="title">Used Car Predictor By Pulin</span>
     </div>
     """,
     unsafe_allow_html=True

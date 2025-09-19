@@ -167,9 +167,10 @@ if 'prediction' not in st.session_state:
     st.session_state.prediction = None
 
 if predict_clicked:
+    car_age = datetime.now().year - year
     input_data = pd.DataFrame(
-        [[car_name, year, km_driven, fuel, seller_type, transmission, owner]],
-        columns=["Car_Name", "Year", "KM_Driven", "Fuel", "Seller_Type", "Transmission", "Owner"]
+        [[car_name, car_age, km_driven, fuel, seller_type, transmission, owner]],
+        columns=["car_name", "car_age", "km_driven", "fuel", "seller_type", "transmission", "owner"]
     )
     try:
         st.session_state.prediction = float(model.predict(input_data)[0])

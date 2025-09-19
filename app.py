@@ -162,12 +162,30 @@ with tabs[0]:
     predict_clicked = st.button("🔍 Predict Price")
     st.markdown("</div>", unsafe_allow_html=True)
 
+# ---- Prediction logic ----
+if 'prediction' not in st.session_state:
+    st.session_state.prediction = None
+
+if predict_clicked:
+    input_data = pd.DataFrame(
+        [[car_name, year, km_driven, fuel, seller_type, transmission, owner]],
+        columns=["Car_Name", "Year", "KM_Driven", "Fuel", "Seller_Type", "Transmission", "Owner"]
+    )
+    try:
+        st.session_state.prediction = float(model.predict(input_data)[0])
+    except Exception as e:
+        st.error(f"Prediction failed: {e}")
+
 # ---- Tab 2: Prediction ----
 with tabs[1]:
-    if 'prediction' not in st.session_state:
+    if st.session_state.prediction is None:
         st.info("Go to Inputs tab and click Predict.")
     else:
-        st.markdown(f'<div class="result-box">Predicted Price: ₹ {st.session_state.prediction:,.2f}</div>', unsafe_allow_html=True)
+        price = float(st.session_state.prediction)
+        st.markdown(
+            f'<div class="result-box">Predicted Price: ₹ {price:,.2f}</div>',
+            unsafe_allow_html=True
+        )
 
 # ---- Tab 3: Metrics ----
 with tabs[2]:
@@ -188,24 +206,17 @@ with tabs[2]:
         else:
             st.error("CSV must contain 'actual' and 'predicted' columns.")
 
-# ---- Prediction logic ----
-if 'prediction' not in st.session_state:
-    st.session_state.prediction = None
-
-if 'predict_clicked' in locals() and predict_clicked:
-    input_data = pd.DataFrame(
-        [[car_name, year, km_driven, fuel, seller_type, transmission, owner]],
-        columns=["Car_Name", "Year", "KM_Driven", "Fuel", "Seller_Type", "Transmission", "Owner"]
-    )
-    st.session_state.prediction = model.predict(input_data)[0]
-
 # ---- Sticky bottom bar (mobile-first style) ----
 if st.session_state.prediction is not None:
-    st.markdown(
-        f"""
-        <div class='sticky-bar'>
-            <button disabled>Predicted Price: ₹ {st.session_state.prediction:,.2f}</button>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    try:
+        price = float(st.session_state.prediction)
+        st.markdown(
+            f"""
+            <div class='sticky-bar'>
+                <button disabled>Predicted Price: ₹ {price:,.2f}</button>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    except Exception as e:
+        st.error(f"Prediction could not be displayed in sticky bar: {e}")

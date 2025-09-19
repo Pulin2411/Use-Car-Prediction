@@ -20,7 +20,7 @@ except Exception:
     pass
 
 # ---- Page setup ----
-st.set_page_config(page_title="Used Car Price Prediction", page_icon="🚗", layout="centered")
+st.set_page_config(page_title="Used Car Price Predictor", page_icon="🚗", layout="centered")
 
 st.markdown("""
 <style>
@@ -127,7 +127,7 @@ st.sidebar.markdown("""
 4. Check result instantly.
 """)
 
-st.title("🚗 Used Car Price Predictor")
+st.title("🚗 Used Car Price Predictor - By Pulin")
 
 # Load the model
 MODEL_PATH = "best_model_GradientBoosting.pickle"

@@ -138,12 +138,52 @@ def load_model(path: str):
 
 model = load_model(MODEL_PATH)
 
+# ---- Extract car options dynamically ----
+def get_car_options(model):
+    if not isinstance(model, Pipeline):
+        return []
+    preproc = None
+    for _, step in model.steps:
+        if isinstance(step, ColumnTransformer):
+            preproc = step
+            break
+        if isinstance(step, Pipeline):
+            for _, inner in step.steps:
+                if isinstance(inner, ColumnTransformer):
+                    preproc = inner
+                    break
+    if preproc is None:
+        return []
+
+    for _, transformer, cols in preproc.transformers:
+        enc = transformer
+        if isinstance(transformer, Pipeline) and transformer.steps:
+            enc = transformer.steps[0][1]
+        if isinstance(enc, OneHotEncoder) and hasattr(enc, "categories_"):
+            for cats, col in zip(enc.categories_, cols):
+                if str(col).lower() in ["car_name", "name", "model", "car_model", "brand_model"]:
+                    return sorted([str(x) for x in cats if str(x).strip() != ""])
+    return []
+
+car_options = get_car_options(model)
+if not car_options:
+    car_options = [
+        "Maruti Swift", "Maruti Alto", "Maruti Baleno", "Maruti Dzire",
+        "Hyundai i10", "Hyundai i20", "Hyundai Creta", "Hyundai Verna",
+        "Honda City", "Honda Amaze",
+        "Tata Nexon", "Tata Tiago", "Tata Altroz",
+        "Toyota Innova", "Toyota Glanza",
+        "Mahindra XUV500", "Mahindra Scorpio",
+        "Ford EcoSport", "Renault Kwid", "Skoda Rapid", "Volkswagen Polo"
+    ]
+
 # ---- Form Layout ----
 with st.form("prediction_form", clear_on_submit=False):
     st.subheader("Enter Car Details")
 
     with st.container():
         st.markdown("<div class='card'><div class='card-title'>Vehicle Details</div>", unsafe_allow_html=True)
+        car_name = st.selectbox("Car Name", car_options, index=0)
         year = st.number_input("Year", min_value=1980, max_value=datetime.now().year, value=2015, step=1, format="%d")
         km_driven = st.number_input("Kilometers Driven", min_value=0, value=50000, step=500, format="%d")
         fuel = st.selectbox("Fuel Type", ["Petrol", "Diesel", "CNG", "LPG", "Electric"])
@@ -160,8 +200,8 @@ with st.form("prediction_form", clear_on_submit=False):
 
 if submit:
     input_data = pd.DataFrame(
-        [[year, km_driven, fuel, seller_type, transmission, owner]],
-        columns=["Year", "KM_Driven", "Fuel", "Seller_Type", "Transmission", "Owner"]
+        [[car_name, year, km_driven, fuel, seller_type, transmission, owner]],
+        columns=["Car_Name", "Year", "KM_Driven", "Fuel", "Seller_Type", "Transmission", "Owner"]
     )
 
     prediction = model.predict(input_data)[0]
